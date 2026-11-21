@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>qwensese · 本地角色对话</title>
+<link rel="stylesheet" href="/style.css?v=4">
+</head>
+<body>
+<div id="app">
+
+  <aside id="sidebar">
+    <div class="brand">
+      <span class="dot" id="server-dot"></span>
+      <div>
+        <b>qwensese</b>
+        <small>本地 · 自托管 · Qwen3.8-27B</small>
+      </div>
+    </div>
+    <div class="side-scroll">
+      <div class="side-label">角色卡</div>
+      <div id="cards"></div>
+      <button id="btn-new-card">＋ 新建角色卡</button>
+      <button id="btn-import" style="margin:8px 8px 0;padding:9px 10px;width:calc(100% - 16px);border:1px dashed var(--line);border-radius:11px;color:var(--dim);font-size:13px;text-align:left">✨ 生成角色卡</button>
+    </div>
+    <div class="side-foot" id="side-foot">加载中…</div>
+  </aside>
+
+  <main id="main">
+    <header id="topbar">
+      <div class="who"><b id="cur-name">—</b><span id="cur-role"></span></div>
+      <div class="spacer"></div>
+      <div class="model-bar">
+        <select id="sel-model" title="模型：切换后下一条回复就用新模型"></select>
+        <select id="sel-ctx" title="上下文长度：越大记得越多，但超出显存会掉速"></select>
+        <select id="sel-len" title="回复长度">
+          <option value="0">短</option>
+          <option value="1" selected>中</option>
+          <option value="2">长</option>
+          <option value="3">超长</option>
+        </select>
+        <button id="btn-mode" class="chip-btn" title="切换模式：角色对话 / 叙事者（讲故事）">对话</button>
+        <button id="btn-me" class="icon-btn" title="我的角色卡：设定「我」在 AI 眼里是什么样">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c0-3.6 3.4-6.2 7.5-6.2s7.5 2.6 7.5 6.2"/>
+          </svg>
+        </button>
+        <button id="btn-saves" class="icon-btn" title="对话存档：保存 / 加载">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+            <path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/>
+          </svg>
+        </button>
+        <button id="btn-regen" class="icon-btn" title="重新生成上一条回复">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>
+          </svg>
+        </button>
+        <button id="btn-undo" class="icon-btn" title="撤回上一轮（我 + 角色两条一起删掉）">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 11a8 8 0 1 1 2.3 5.7"/><path d="M4 4v7h7"/>
+          </svg>
+        </button>
+      </div>
+      <select id="sel-level" class="chip-select" title="尺度：0 剧情 / 1 暧昧 / 2 情色 / 3 露骨">
+        <option value="0">0 剧情</option>
+        <option value="1">1 暧昧</option>
+        <option value="2" selected>2 情色</option>
+        <option value="3">3 露骨</option>
+      </select>
+      <button class="icon-btn" id="btn-drawer" title="设置">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/>
+        </svg>
+      </button>
+      <button class="icon-btn" id="btn-edit" title="编辑角色卡">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">
+          <path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M14 6l4 4"/>
+        </svg>
+      </button>
+      <button class="icon-btn" id="btn-clear" title="清空这段对话">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v6M14 11v6"/>
+        </svg>
+      </button>
+    </header>
+
+    <section id="messages">
+      <div class="msg-wrap" id="msg-list"></div>
+    </section>
+
+    <footer id="composer">
+      <div id="idea-wrap" style="display:none">
+        <div id="idea-head">
+          <button id="idea-btn" class="chip-btn" title="让模型给你几条接下来可以说的话">💡 帮我想</button>
+          <button id="idea-close" class="icon-btn" style="width:26px;height:26px;display:none" title="收起">✕</button>
+        </div>
+        <div id="idea-list"></div>
+      </div>
+      <div class="box">
+        <textarea id="input" rows="1" placeholder="说点什么…（Enter 发送，Shift+Enter 换行）"></textarea>
+        <button id="send">发送</button>
+        <button id="stop">停止</button>
+      </div>
+      <div class="meta-row">
+        <span id="stat-tps">—</span>
+        <span id="stat-ctx">—</span>
+        <span id="stat-note" class="warn"></span>
+      </div>
+    </footer>
+  </main>
+</div>
+
+<div id="scrim"></div>
+
+<aside id="drawer">
+  <div class="drawer-head">
+    <b>本轮参数</b>
+    <button class="icon-btn" id="drawer-close">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="field">
+      <label>尺度 <b id="lv-label">2 · 情色</b></label>
+      <input type="range" id="lv" min="0" max="3" step="1" value="2">
+      <div class="level-ticks"><span>0 剧情</span><span>1 暧昧</span><span>2 情色</span><span>3 露骨</span></div>
+      <div class="hint" id="lv-hint"></div>
+    </div>
+
+    <div class="field">
+      <label>温度 <b id="temp-label">0.80</b></label>
+      <input type="range" id="temp" min="0.1" max="1.3" step="0.05" value="0.8">
+      <div class="hint">低于 0.5 会明显变"保守"，因为它退化成总选最安全的那条路。</div>
+    </div>
+
+    <div class="field">
+      <label>top_p <b id="topp-label">0.92</b></label>
+      <input type="range" id="topp" min="0.6" max="1" step="0.01" value="0.92">
+    </div>
+
+    <div class="field">
+      <label>复读惩罚 <b id="rep-label">1.05</b></label>
+      <input type="range" id="rep" min="1" max="1.2" step="0.01" value="1.05">
+    </div>
+
+    <div class="field">
+      <div class="switch">
+        <input type="checkbox" id="use-style" checked>
+        <label for="use-style">带上文风规则（prompts/style-guide.md）</label>
+      </div>
+      <div class="hint">关掉会更"模型味"，开着更像小说。</div>
+    </div>
+
+    <div class="field">
+      <label>本轮额外指令（只影响下一条回复）</label>
+      <textarea id="extra" rows="4" placeholder="例：这一轮写得更慢一点，只推进一个动作。"></textarea>
+    </div>
+
+    <div class="field">
+      <label>上下文压缩 <b id="sum-state">未压缩</b></label>
+      <button class="btn" id="btn-compress" style="width:100%">把前面的对话压成摘要</button>
+      <label class="switch" style="margin-top:8px">
+        <input type="checkbox" id="auto-sum-chk" checked>
+        <label for="auto-sum-chk">上下文快满时自动压缩</label>
+      </label>
+      <button class="btn" id="btn-unsum" style="width:100%;margin-top:6px;display:none">撤销压缩（恢复逐条历史）</button>
+      <div class="hint">聊得太长、底部提示快满时用。压缩后：<b>旧对话变成一段前情摘要</b>塞进 system，只保留最近 4 条原文，token 立刻降下来，剧情不会断。</div>
+    </div>
+
+    <div class="field">
+      <label>开场白</label>
+      <button class="btn" id="btn-reopen" style="width:100%">用卡里的开场白重开这段对话</button>
+      <div class="hint">会清空当前对话，把开场白作为第一句（角色卡本身不动）。改开场白请点顶栏 ✎。</div>
+    </div>
+
+    <div class="field">
+      <label>提示词来源</label>
+      <div class="hint">
+        角色卡：<code>personas/&lt;角色&gt;.md</code><br>
+        系统提示词：<code>prompts/system-core.md</code><br>
+        这两处改了以后，页面刷新即生效（不用重建模型）。
+      </div>
+    </div>
+  </div>
+</aside>
+
+<div id="modal">
+  <div class="modal-card">
+    <div class="modal-head">
+      <b id="modal-title">编辑角色卡</b>
+      <button class="icon-btn" id="modal-close">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-foot">
+      <button class="btn danger" id="modal-delete">删除这张卡</button>
+      <button class="btn" id="modal-cancel">取消</button>
+      <button class="btn primary" id="modal-save">保存到文件</button>
+    </div>
+  </div>
+</div>
+
+<div id="import-modal">
+  <div class="modal-card" style="width:min(880px,100%)">
+    <div class="modal-head">
+      <b>生成角色卡</b>
+      <button class="icon-btn" id="import-close">✕</button>
+    </div>
+
+    <div class="modal-body" id="gen-step1" style="display:block">
+      <div class="seg-row">
+        <span class="seg-label">放进哪里</span>
+        <div class="seg" id="gen-target">
+          <button type="button" class="seg-btn on" data-v="persona">角色卡 · AI 演的人</button>
+          <button type="button" class="seg-btn" data-v="me">自我角色卡 · 「我」</button>
+        </div>
+      </div>
+      <div class="seg-row">
+        <span class="seg-label">怎么生成</span>
+        <div class="seg" id="gen-mode">
+          <button type="button" class="seg-btn on" data-v="dialog">从对话提取</button>
+          <button type="button" class="seg-btn" data-v="desc">从描述生成</button>
+        </div>
+      </div>
+
+      <div class="cell full" style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:6px">
+          <label id="gen-label" style="font-size:12px;color:var(--dim)">把现成的对话粘进来</label>
+          <button class="btn" id="import-paste" style="padding:5px 10px;font-size:12px;white-space:nowrap">📋 从剪贴板粘贴</button>
+        </div>
+        <textarea id="import-text" rows="11"></textarea>
+        <div class="hint" id="gen-hint" style="font-size:11.5px;color:var(--dim-2);margin-top:6px"></div>
+      </div>
+
+      <div id="gen-opts" style="display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+        <label style="font-size:12.5px;color:var(--dim)" id="gen-who-wrap">谁是「我」：
+          <select id="import-narrator" style="background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:5px 8px">
+            <option value="">自动判断</option>
+            <option value="left">第一个说话的人是我</option>
+            <option value="right">第二个人是我</option>
+          </select>
+        </label>
+        <label style="font-size:12.5px;color:var(--dim)" id="gen-nomodel-wrap">
+          <input type="checkbox" id="import-nomodel"> 只用本地统计（不调模型，快但粗糙）
+        </label>
+      </div>
+
+      <div id="import-log" style="font-size:12px;color:var(--dim-2);line-height:1.8;max-height:120px;overflow-y:auto;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:none"></div>
+    </div>
+
+    <div class="modal-body" id="gen-step2" style="display:none">
+      <div class="gen-bar">
+        <span id="gen-preview-info" style="font-weight:600"></span>
+        <span style="font-size:12px;color:var(--dim-2)">每一格都能直接改；改完点右下「确认加入」才会真的写进卡里。</span>
+      </div>
+      <div id="gen-preview" class="gen-grid"></div>
+    </div>
+
+    <div class="modal-foot">
+      <button class="btn" id="gen-back" style="display:none">← 返回改输入</button>
+      <button class="btn" id="import-cancel">取消</button>
+      <button class="btn primary" id="import-run">开始生成</button>
+      <button class="btn primary" id="gen-confirm" style="display:none">确认加入</button>
+    </div>
+  </div>
+</div>
+
+<div id="me-modal">
+  <div class="modal-card" style="width:min(760px,100%)">
+    <div class="modal-head">
+      <b>我的角色卡 —— 「我」在 AI 眼里是什么样</b>
+      <button class="icon-btn" id="me-close">✕</button>
+    </div>
+    <div id="me-rail-wrap">
+      <div class="rail-label">我的角色卡（点一张就切换，所有角色卡共用当前这张）</div>
+      <div id="me-rail"></div>
+    </div>
+    <div id="me-import-wrap" style="padding:0 18px">
+      <button class="btn" id="me-import-btn" style="width:100%">📥 从现有对话导入（自动提取「我」的设定）</button>
+      <div id="me-import-box" style="display:none;margin-top:8px">
+        <textarea id="me-import-text" rows="6" placeholder="把对话贴进来：可以是「名字：内容」一行一句，也可以整段直接复制（从网页/聊天软件里复制都行）"></textarea>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+          <button class="btn primary" id="me-import-run">开始提取</button>
+          <span id="me-import-status" style="font-size:12px;color:var(--dim-2)"></span>
+        </div>
+        <div class="hint" style="font-size:11.5px;color:var(--dim-2);margin-top:6px">只会提取「你」这个人本身（长相/性格/说话风格），<b>不会</b>把剧情写进去。</div>
+      </div>
+    </div>
+    <div class="modal-body" id="me-body"></div>
+    <div class="modal-foot">
+      <button class="btn danger" id="me-delete">删除这张</button>
+      <button class="btn" id="me-cancel">取消</button>
+      <button class="btn primary" id="me-save">保存这张卡</button>
+    </div>
+  </div>
+</div>
+
+<div id="saves-modal">
+  <div class="modal-card" style="width:min(820px,100%)">
+    <div class="modal-head">
+      <b>历史对话</b>
+      <button class="icon-btn" id="saves-close">✕</button>
+    </div>
+    <div class="modal-body" style="display:block">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+        <input id="save-name" type="text" placeholder="给这段对话起个名字（可留空自动生成）"
+               style="flex:1;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:9px 11px;color:var(--txt)">
+        <button class="btn primary" id="save-now" style="white-space:nowrap">保存当前对话</button>
+      </div>
+      <div class="hist-bar">
+        <label class="switch" style="margin:0">
+          <input type="checkbox" id="auto-save-chk" checked>
+          <label for="auto-save-chk" style="font-size:12.5px">每轮自动保存到本机</label>
+        </label>
+        <span id="hist-count" style="font-size:12px;color:var(--dim-2)"></span>
+      </div>
+      <div style="font-size:12px;color:var(--dim-2);margin:8px 0 10px">
+        点一张对话卡就能「接着聊」：角色卡、尺度、模型都跟着还原。自动保存的那段会一直原地更新，不会堆一堆重复的。
+      </div>
+      <div id="saves-list" class="hist-grid"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="saves-cancel">关闭</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="/app.js"></script>
+</body>
+</html>

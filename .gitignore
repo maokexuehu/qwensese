@@ -1,0 +1,40 @@
+# ---- 运行时数据 / 私有内容（一律不要提交）----
+# 对话存档（含私人聊天记录）
+saves/
+logs/
+# 本机配置（可能含 access_key 口令）
+web/config.json
+# 当前使用的「我的角色卡」指针（运行时状态）
+config/current_user_persona.txt
+# 模型权重与运行时（体积巨大，不入库）
+models/
+gguf/
+ollama/ollama.exe
+ollama/ollama*.exe
+cloudflared/
+# 自己加的角色卡/角色设定（只保留仓库自带的示例）
+personas/private/
+
+# ---- 构建/缓存 ----
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+node_modules/
+
+# ---- 操作系统 / 编辑器 ----
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+
+# ---- 备份 / 临时 ----
+*.bak
+*.bak-*
+*.orig
+*.tmp
+*~

@@ -1,0 +1,10 @@
+# 说明：FROM 路径按仓库根相对写法示例；ollama create 时可用 -f 指向本文件，
+# 或改成你机器上 GGUF 的实际绝对路径。
+FROM models/gguf/Huihui-Qwen3.8-27B-abliterated-UD-IQ4_XS.gguf
+TEMPLATE """SYS[{{ .System }}]
+{{ range .Messages }}ROLE[{{ .Role }}]{{ .Content }}
+{{ end }}END"""
+PARAMETER num_ctx 16384
+PARAMETER num_predict 200
+PARAMETER temperature 0
+PARAMETER stop "<|im_end|>"

@@ -1,0 +1,14 @@
+# 本项目零第三方依赖（zero third-party dependencies）
+#
+# qwensese 的后端只使用 Python 标准库（http.server / urllib / json / re /
+# threading / subprocess 等），前端是原生 HTML/CSS/JavaScript，没有 npm 依赖，
+# 也没有构建步骤。因此这个文件故意不列任何包，`pip install -r requirements.txt`
+# 不会安装任何东西，也不会改变运行环境。
+#
+# 运行要求：
+#   - Python 3.10+（开发环境为 3.12）
+#   - Ollama（另装的可执行文件，不是 Python 包；用于本地推理）
+#   - 一个 GGUF 模型权重（见 README「获取模型」与 docs/quickstart.md）
+#
+# 不要为了"让依赖安装看起来正常"往这里添加第三方包；如需第三方能力，
+# 请在 CONTRIBUTING.md 说明理由并优先考虑标准库实现。
