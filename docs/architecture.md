@@ -158,6 +158,24 @@ Ollama 的 `/api/chat` 流本身就是 NDJSON（一行一个 JSON）。服务端
 
 更多安全细节见 [SECURITY.md](../SECURITY.md)。
 
+## 硬件选型与模型工具链（0.2.0）
+
+浏览器点「🖥️ 硬件选型」→ `GET /api/hardware` → `app.py` 的 `hardware_payload()` 懒加载
+`scripts/model_advisor.py`（通过 `sys.path` 引入，不复制逻辑）→ `detect_hardware()` 调外部命令
+（`nvidia-smi` / 注册表 / sysfs / `system_profiler`）→ `recommend()` 用 `scripts/model_catalog.json`
+做纯函数推荐 → 结果缓存 300 秒返回。检测失败只影响推荐，不影响对话主链路。
+
+`scripts/` 下的三个工具互相独立、可单独使用：
+
+```text
+model_advisor.py  ——检测硬件、读 catalog、算推荐，可选 --download 转调下载器
+download_model.py ——HF 元数据取 sha256 → Range 断点续传 → 校验 → 写 .sha256
+import_model.py   ——import web/app.py 的 build_system() 生成 Modelfile → ollama create
+```
+
+`import_model.py` 复用 `app.py` 的 `build_system()`，所以"网页里改角色卡即时生效"与"导入模型的
+内置 SYSTEM"来自同一份拼装逻辑；不会出现两套提示词行为不一致。
+
 ## 模型列表与虚拟模型名
 
 - `model_list()` 调 Ollama `/api/tags` 拿到已安装模型，结合内置预设（`qwensese-27b`、`qwensese-14b`）补充中文标签、推荐 `num_ctx` 与可选上下文档位；未安装的预设也列出（`missing`/`offline` 标记）。

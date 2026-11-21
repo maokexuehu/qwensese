@@ -4,6 +4,48 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-22
+
+"按显卡选模型 + 安全加固 + clean clone 可测"版本。
+
+### Added
+
+- **硬件选型工具链（跨平台，纯 Python）**：
+  - `scripts/model_advisor.py`：检测显卡/显存/内存/CPU（`nvidia-smi` → Windows 注册表 → Linux sysfs → macOS `system_profiler` 逐级降级），按显存档位推荐 Qwen3 GGUF 模型与量化，给出下载/导入命令；支持 `--json`、`--list`、`--check`、`--download`。
+  - `scripts/download_model.py`：断点续传（HTTP Range）+ SHA256 校验（读取 HuggingFace LFS 元数据，或 `--sha256` 手工指定）；不匹配时改名 `.bad` 并失败。
+  - `scripts/import_model.py`：复用 `web/app.py` 的 `build_system()` 生成 Modelfile（SYSTEM/TEMPLATE/num_ctx），执行 `ollama create`；支持 `--dry-run`。
+  - `scripts/model_catalog.json`：候选模型数据文件（可直接编辑），含实测标记与上游变动提示。
+  - `scripts/model-advisor.ps1`：Windows 薄包装（纯 ASCII）。
+- `GET /api/hardware`：返回硬件检测结果与推荐（缓存 5 分钟），供网页使用。
+- 网页新增「🖥️ 硬件选型」按钮与面板（`web/extra.js`）：展示显存/档位/推荐模型及可复制的下载、导入命令。
+- 首次访问的 18+ 内容提示（前端本地确认，`adult_only` 可关）。
+- `docs/model-selection.md`（选型/下载/校验/导入/14B 路径/Linux 对等/硬件账单）、
+  `docs/security-model.md`（威胁矩阵与残余风险）、`docs/roadmap.md`（已知短板与计划）。
+- GitHub Actions：`ci.yml`（Ubuntu/Windows × Python 3.10/3.12 全量测试）、`release.yml`（tag 自动打包发布）。
+- issue / PR 模板、`CODE_OF_CONDUCT.md`。
+- 测试：`tests/test_advisor.py`（16 个用例，含 16GB→27B 实测组合的回归保护）；layout 新增"运行时文件可选"、"必需文件必须被 git 跟踪"、"安全校验静态检查"等用例；API 测试新增安全响应头/Host/Origin/Content-Type/`/api/hardware` 用例。
+
+### Changed
+
+- 下载/导入/选型以纯 Python 脚本为主，PowerShell 脚本改为薄包装（Linux/macOS 获得对等体验）。
+- README 重写：明确"首次要下十几 GB""16 GB 级显存""磁盘/内存/时间"账单，移除"3 步开始"的淡化表述（改为 4 步并附 Linux 命令）。
+- `web/config.example.json` 增加 `host_check` / `origin_check` / `require_json` / `allow_insecure_lan` / `adult_only` / `access_log`。
+- `scripts/start.sh` 在没有 GGUF 时提示先用选型/下载工具；README 与 API 文档同步 20 个 `/api/*` 路径。
+
+### Security
+
+- 新增 Host 白名单校验（防 DNS rebinding）与 POST 的 Origin/Referer 校验（防跨站删卡/烧卡）。
+- 写接口强制 `application/json`（防表单 CSRF）；新增全局安全响应头（CSP、nosniff、X-Frame-Options、Referrer-Policy、COOP/CORP、Permissions-Policy）。
+- 口令 cookie 收紧为 `SameSite=Strict; HttpOnly`。
+- 角色卡/存档/"我"的读-改-写共用可重入锁，修复并发丢更新。
+- `--lan` 且无 `access_key` 时拒绝启动（可用 `--insecure-lan` / `allow_insecure_lan` 显式覆盖）。
+- 可选访问日志 `access_log`（默认关闭）。
+
+### Fixed
+
+- **clean clone 测试失败**：`config/current_user_persona.txt` 是 `.gitignore` 忽略的运行时指针，却被列为必需文件；现在按运行时文件处理并新增 git 跟踪检查。
+- 文档中缺失的 `qwensese-14b` 安装路径已补齐（见 `docs/model-selection.md`）。
+
 ## [0.1.0] - 2026-11-21
 
 首个公开版本。

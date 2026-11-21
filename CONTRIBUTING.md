@@ -40,6 +40,7 @@ python tests/run_all.py
 ```
 
 - `tests/test_layout.py`：检查仓库目录/文件完整性、`web/app.py` 可被 `ast.parse`、角色卡可解析、无绝对路径/密钥/NSFW 关键词等。
+- `tests/test_advisor.py`：硬件选型的纯函数测试（不联网、不需要 GPU），含 16GB→27B 实测组合的回归保护。
 - `tests/test_api.py`：把仓库复制到临时目录，启动真实 `web/app.py`（随机空闲端口），用 `urllib` 覆盖主要 GET/POST 接口、字段合并写、存档流程与 `access_key` 鉴权；不需要 Ollama 与模型。
 - `python tests/run_all.py --skip-api`：只跑快速布局检查（不启动服务，几秒结束）。
 - `python tests/run_all.py --strict`：布局检查把"发布元数据文件缺失"也当作 FAIL（默认只 WARN）。
@@ -47,7 +48,9 @@ python tests/run_all.py
 
 各用例覆盖范围见 `tests/README.md`。
 
-提交 PR 前请确保 `tests/run_all.py` 退出码为 0。
+提交 PR 前请确保 `tests/run_all.py` 退出码为 0。CI（`.github/workflows/ci.yml`）会在 Ubuntu/Windows
+× Python 3.10/3.12 上跑同一套测试；新增行为请优先补测试而不是只改文档。已知短板与拆分计划见
+[docs/roadmap.md](docs/roadmap.md)，欢迎认领。
 
 ## PR 流程
 

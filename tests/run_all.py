@@ -72,13 +72,13 @@ def main():
                         help="跳过 test_api.py（不启动真实服务，只跑布局检查）")
     parser.add_argument("--strict", action="store_true",
                         help="传给 test_layout.py：发布元数据文件缺失也算 FAIL")
-    parser.add_argument("--only", choices=["test_layout", "test_api"],
+    parser.add_argument("--only", choices=["test_layout", "test_advisor", "test_api"],
                         help="只跑指定的一个测试文件")
     args = parser.parse_args()
 
-    scripts = ["test_layout.py", "test_api.py"]
+    scripts = ["test_layout.py", "test_advisor.py", "test_api.py"]
     if args.skip_api or args.only == "test_layout":
-        scripts = ["test_layout.py"]
+        scripts = ["test_layout.py", "test_advisor.py"]
     if args.only:
         scripts = [args.only + ".py"]
 

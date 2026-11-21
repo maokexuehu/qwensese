@@ -1,0 +1,55 @@
+name: Bug report
+description: 报告可复现的问题（不是安全漏洞；安全漏洞请走私密通道，见 SECURITY.md）
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！提交前请先运行 `python tests/run_all.py` 并贴出结果。
+        安全漏洞请**不要**开公开 issue，见 [SECURITY.md](../blob/main/SECURITY.md)。
+  - type: input
+    id: version
+    attributes:
+      label: 版本 / 提交
+      description: tag（如 v0.2.0）或 `git rev-parse --short HEAD` 的输出
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境
+      description: 操作系统、Python 版本、Ollama 版本、显卡与显存（可用 `python scripts/model_advisor.py` 的输出）
+      placeholder: |
+        Windows 11 23H2 / Python 3.12.4 / Ollama 0.5.x / RTX 5080 16GB
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. python scripts/start.ps1
+        2. 打开 http://127.0.0.1:8717/
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为 / 完整报错
+      description: 请贴完整 traceback 或浏览器 Console 报错，不要只写"不行"
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: 测试结果
+      description: `python tests/run_all.py` 的最后几行（SUMMARY / RESULT）
+      render: text

@@ -1,0 +1,142 @@
+{
+  "schema": 1,
+  "updated": "2026-11-22",
+  "note": "候选模型目录。size_gb / min_vram_gb 为含上下文的经验估算；tested=true 表示本仓库作者实测过。unstable=true 表示上游仓库/文件名可能变动，下载前请先跑 --check。",
+  "models": [
+    {
+      "id": "qwen3-1.7b",
+      "label": "Qwen3 1.7B · 极轻量",
+      "family": "official",
+      "abliterated": false,
+      "repo": "Qwen/Qwen3-1.7B-GGUF",
+      "params_b": 1.7,
+      "tested": false,
+      "roleplay": "简单闲聊可以；长剧情容易跳戏",
+      "quants": [
+        {"quant": "Q4_K_M", "file": "Qwen3-1.7B-Q4_K_M.gguf", "size_gb": 1.4, "min_vram_gb": 3, "quality": 0.92},
+        {"quant": "Q8_0", "file": "Qwen3-1.7B-Q8_0.gguf", "size_gb": 2.1, "min_vram_gb": 4, "quality": 1.0}
+      ]
+    },
+    {
+      "id": "qwen3-4b",
+      "label": "Qwen3 4B · 轻量 / CPU 可用",
+      "family": "official",
+      "abliterated": false,
+      "repo": "Qwen/Qwen3-4B-GGUF",
+      "params_b": 4,
+      "tested": false,
+      "roleplay": "日常对话、短剧情；尺度内容容易被官方护栏打断",
+      "quants": [
+        {"quant": "Q4_K_M", "file": "Qwen3-4B-Q4_K_M.gguf", "size_gb": 2.5, "min_vram_gb": 4, "quality": 0.92},
+        {"quant": "Q5_K_M", "file": "Qwen3-4B-Q5_K_M.gguf", "size_gb": 2.9, "min_vram_gb": 5, "quality": 0.95},
+        {"quant": "Q8_0", "file": "Qwen3-4B-Q8_0.gguf", "size_gb": 4.3, "min_vram_gb": 7, "quality": 1.0}
+      ]
+    },
+    {
+      "id": "qwen3-8b",
+      "label": "Qwen3 8B · 主流甜点",
+      "family": "official",
+      "abliterated": false,
+      "repo": "Qwen/Qwen3-8B-GGUF",
+      "params_b": 8,
+      "tested": false,
+      "roleplay": "文笔够用、速度快；官方模型对成人向内容会拒答",
+      "quants": [
+        {"quant": "Q4_K_M", "file": "Qwen3-8B-Q4_K_M.gguf", "size_gb": 5.0, "min_vram_gb": 8, "quality": 0.92},
+        {"quant": "Q5_K_M", "file": "Qwen3-8B-Q5_K_M.gguf", "size_gb": 6.0, "min_vram_gb": 9, "quality": 0.95},
+        {"quant": "Q6_K", "file": "Qwen3-8B-Q6_K.gguf", "size_gb": 6.9, "min_vram_gb": 10, "quality": 0.97},
+        {"quant": "Q8_0", "file": "Qwen3-8B-Q8_0.gguf", "size_gb": 8.9, "min_vram_gb": 13, "quality": 1.0}
+      ]
+    },
+    {
+      "id": "qwen3-14b",
+      "label": "Qwen3 14B · 质量/速度平衡",
+      "family": "official",
+      "abliterated": false,
+      "repo": "Qwen/Qwen3-14B-GGUF",
+      "params_b": 14,
+      "tested": false,
+      "roleplay": "角色一致性明显比 8B 好；官方模型对成人向内容会拒答",
+      "quants": [
+        {"quant": "Q4_K_M", "file": "Qwen3-14B-Q4_K_M.gguf", "size_gb": 9.0, "min_vram_gb": 12, "quality": 0.92},
+        {"quant": "Q5_K_M", "file": "Qwen3-14B-Q5_K_M.gguf", "size_gb": 10.8, "min_vram_gb": 14, "quality": 0.95},
+        {"quant": "Q6_K", "file": "Qwen3-14B-Q6_K.gguf", "size_gb": 12.3, "min_vram_gb": 16, "quality": 0.97}
+      ]
+    },
+    {
+      "id": "qwen3-32b",
+      "label": "Qwen3 32B · 高质量（需大显存）",
+      "family": "official",
+      "abliterated": false,
+      "repo": "Qwen/Qwen3-32B-GGUF",
+      "params_b": 32,
+      "tested": false,
+      "roleplay": "长剧情、多人物同场最稳；显存门槛高，官方模型对成人向内容会拒答",
+      "quants": [
+        {"quant": "Q4_K_M", "file": "Qwen3-32B-Q4_K_M.gguf", "size_gb": 20.0, "min_vram_gb": 24, "quality": 0.92},
+        {"quant": "Q5_K_M", "file": "Qwen3-32B-Q5_K_M.gguf", "size_gb": 24.0, "min_vram_gb": 28, "quality": 0.95},
+        {"quant": "Q6_K", "file": "Qwen3-32B-Q6_K.gguf", "size_gb": 27.5, "min_vram_gb": 32, "quality": 0.97}
+      ]
+    },
+    {
+      "id": "huihui-27b",
+      "label": "27B abliterated · 本仓库实测默认",
+      "family": "abliterated",
+      "abliterated": true,
+      "repo": "huihui-ai/Huihui-Qwen3.8-27B-abliterated-GGUF",
+      "params_b": 27,
+      "tested": true,
+      "roleplay": "本仓库默认底座：权重层面消融拒答方向，适合成人向长剧情",
+      "quants": [
+        {"quant": "UD-IQ4_XS", "file": "Huihui-Qwen3.8-27B-abliterated-UD-IQ4_XS.gguf", "size_gb": 13.4, "min_vram_gb": 16, "quality": 0.9},
+        {"quant": "UD-Q4_K_XL", "file": "Huihui-Qwen3.8-27B-abliterated-UD-Q4_K_XL.gguf", "size_gb": 16.5, "min_vram_gb": 20, "quality": 0.93},
+        {"quant": "UD-Q5_K_XL", "file": "Huihui-Qwen3.8-27B-abliterated-UD-Q5_K_XL.gguf", "size_gb": 19.5, "min_vram_gb": 24, "quality": 0.96}
+      ]
+    },
+    {
+      "id": "huihui-8b",
+      "label": "8B abliterated · 小显存无审查",
+      "family": "abliterated",
+      "abliterated": true,
+      "repo": "huihui-ai/Qwen3-8B-abliterated-GGUF",
+      "params_b": 8,
+      "tested": false,
+      "unstable": true,
+      "roleplay": "小卡上的无审查替代；上游仓库若改名请先 --check",
+      "quants": [
+        {"quant": "Q4_K_M", "file": "Qwen3-8B-abliterated-Q4_K_M.gguf", "size_gb": 5.0, "min_vram_gb": 8, "quality": 0.92},
+        {"quant": "Q5_K_M", "file": "Qwen3-8B-abliterated-Q5_K_M.gguf", "size_gb": 6.0, "min_vram_gb": 9, "quality": 0.95}
+      ]
+    },
+    {
+      "id": "huihui-14b",
+      "label": "14B abliterated · 平衡无审查",
+      "family": "abliterated",
+      "abliterated": true,
+      "repo": "huihui-ai/Qwen3-14B-abliterated-GGUF",
+      "params_b": 14,
+      "tested": false,
+      "unstable": true,
+      "roleplay": "12GB 以上显存的无审查甜点；上游仓库若改名请先 --check",
+      "quants": [
+        {"quant": "Q4_K_M", "file": "Qwen3-14B-abliterated-Q4_K_M.gguf", "size_gb": 9.0, "min_vram_gb": 12, "quality": 0.92},
+        {"quant": "Q5_K_M", "file": "Qwen3-14B-abliterated-Q5_K_M.gguf", "size_gb": 10.8, "min_vram_gb": 14, "quality": 0.95}
+      ]
+    },
+    {
+      "id": "huihui-32b",
+      "label": "32B abliterated · 大显存无审查",
+      "family": "abliterated",
+      "abliterated": true,
+      "repo": "huihui-ai/Qwen3-32B-abliterated-GGUF",
+      "params_b": 32,
+      "tested": false,
+      "unstable": true,
+      "roleplay": "24GB 以上显存的无审查高质量选项；上游仓库若改名请先 --check",
+      "quants": [
+        {"quant": "Q4_K_M", "file": "Qwen3-32B-abliterated-Q4_K_M.gguf", "size_gb": 20.0, "min_vram_gb": 24, "quality": 0.92},
+        {"quant": "Q5_K_M", "file": "Qwen3-32B-abliterated-Q5_K_M.gguf", "size_gb": 24.0, "min_vram_gb": 28, "quality": 0.95}
+      ]
+    }
+  ]
+}

@@ -33,6 +33,14 @@ DEFAULT_CONFIG = {
     "num_ctx": 16384,
     "host": "127.0.0.1",
     "port": 8717,
+    # ---- 安全相关的默认值（见 SECURITY.md / docs/security-model.md）----
+    "access_key": "",            # 留空 = 不设防；--lan 时会强制要求设置
+    "host_check": True,          # 校验 Host，防 DNS rebinding
+    "origin_check": True,        # 校验 Origin/Referer，防跨站写操作
+    "require_json": True,        # 写接口必须 application/json（防表单 CSRF）
+    "allow_insecure_lan": False, # 允许无口令的 --lan（不推荐）
+    "adult_only": True,          # 前端首访 18+ 确认
+    "access_log": False,         # 把写请求记到 logs/access.log
 }
 
 LEVELS = {
@@ -82,6 +90,29 @@ def load_config():
 
 
 CONFIG = load_config()
+
+VERSION = "0.2.0"
+
+# ThreadingHTTPServer 是多线程的：两个请求同时"读旧卡 → 合并字段 → 写回"会丢更新。
+# 所有写盘路径共用同一把可重入锁（够用且不会死锁，锁粒度按文件再细分的收益不值得）。
+WRITE_LOCK = threading.RLock()
+
+ACCESS_LOG = os.path.join(ROOT, "logs", "access.log")
+
+# 所有响应都带的安全响应头（JSON API 也带，开销可忽略）
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    "Content-Security-Policy": (
+        "default-src 'self'; img-src 'self' data: blob:; "
+        "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "
+        "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+    ),
+}
 
 
 # ---------------------------------------------------------------- 文件解析
@@ -1494,12 +1525,125 @@ def check_access(handler):
 def gate_headers(handler, fresh):
     if not fresh:
         return None
-    return {"Set-Cookie": "%s=%s; Path=/; Max-Age=2592000; SameSite=Lax; HttpOnly"
+    return {"Set-Cookie": "%s=%s; Path=/; Max-Age=2592000; SameSite=Strict; HttpOnly"
                          % (COOKIE_NAME, access_key())}
+
+
+def save_persona_merged(file, fields):
+    """在锁内完成"读旧卡 → 补缺字段 → 写回"，避免并发请求互相覆盖。"""
+    with WRITE_LOCK:
+        try:
+            oldp = safe_persona_path(file)
+            if os.path.exists(oldp):
+                for k, v in parse_persona(oldp).items():
+                    if k not in fields:
+                        fields[k] = v
+        except Exception:
+            pass
+        return write_persona(file, fields)
+
+
+def save_me_merged(fields, file, select=True):
+    with WRITE_LOCK:
+        if file:
+            try:
+                for k, v in read_me(file).items():
+                    if k not in fields:
+                        fields[k] = v
+            except Exception:
+                pass
+        saved = write_me(fields, file)
+        name = os.path.basename(saved)
+        if select:
+            me_select(name)
+        return saved, name
+
+
+def write_save_locked(body):
+    with WRITE_LOCK:
+        return write_save(body)
+
+
+def delete_save_locked(sid):
+    with WRITE_LOCK:
+        return delete_save(sid)
+
+
+def delete_me_locked(file):
+    with WRITE_LOCK:
+        return delete_me(file)
+
+
+# ---- 硬件检测 / 模型选型（真正实现在 scripts/model_advisor.py）----------
+_HW_CACHE = {"t": 0.0, "data": None}
+
+
+def hardware_payload():
+    now = time.time()
+    if _HW_CACHE["data"] and now - _HW_CACHE["t"] < 300:
+        return _HW_CACHE["data"]
+    scripts_dir = os.path.join(ROOT, "scripts")
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    import model_advisor  # 零第三方依赖的纯标准库脚本
+    data = model_advisor.advisor_payload()
+    _HW_CACHE.update({"t": now, "data": data})
+    return data
+
+
+# ---- 请求级安全检查 ------------------------------------------------------
+def _host_no_port(raw):
+    raw = (raw or "").strip().lower()
+    if not raw:
+        return ""
+    if raw.startswith("["):
+        return raw.split("]")[0] + "]"
+    if ":" in raw:
+        raw = raw.rsplit(":", 1)[0]
+    return raw
+
+
+def allowed_hosts():
+    hosts = {"127.0.0.1", "localhost", "[::1]", "::1"}
+    cfg_host = str(CONFIG.get("host") or "")
+    if cfg_host and cfg_host != "0.0.0.0":
+        hosts.add(_host_no_port(cfg_host))
+    if cfg_host == "0.0.0.0":
+        for ip in lan_ips():
+            hosts.add(ip.lower())
+    for extra in (CONFIG.get("extra_hosts") or []):
+        hosts.add(str(extra).strip().lower())
+    return hosts
+
+
+def same_origin(handler):
+    origin = handler.headers.get("Origin") or handler.headers.get("Referer") or ""
+    if not origin:
+        return True  # 非浏览器客户端（curl / SDK）通常不带 Origin
+    m = re.match(r"^([a-zA-Z][\w+.-]*)://([^/]+)", origin)
+    if not m:
+        return False
+    return _host_no_port(m.group(2)) in allowed_hosts()
 
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "qwensese-ui/1.0"
+
+    def _host_ok(self):
+        if not CONFIG.get("host_check", True):
+            return True
+        return _host_no_port(self.headers.get("Host") or "") in allowed_hosts()
+
+    def _origin_ok(self):
+        if not CONFIG.get("origin_check", True):
+            return True
+        return same_origin(self)
+
+    def _content_type_ok(self):
+        if not CONFIG.get("require_json", True):
+            return True
+        ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        return ctype == "application/json"
 
     def log_message(self, fmt, *args):
         sys.stderr.write("[ui] " + (fmt % args) + "\n")
@@ -1515,10 +1659,22 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        for hk, hv in SECURITY_HEADERS.items():
+            self.send_header(hk, hv)
         for hk, hv in (getattr(self, "_extras", None) or {}).items():
             self.send_header(hk, hv)
         self.end_headers()
         self.wfile.write(body)
+        if CONFIG.get("access_log"):
+            try:
+                os.makedirs(os.path.dirname(ACCESS_LOG), exist_ok=True)
+                line = "%s\t%s\t%s %s\t%d\n" % (
+                    time.strftime("%Y-%m-%d %H:%M:%S"), self.client_address[0],
+                    self.command, self.path, code)
+                with open(ACCESS_LOG, "a", encoding="utf-8", newline="\n") as f:
+                    f.write(line)
+            except Exception:
+                pass
 
     def _static(self, rel):
         path = os.path.normpath(os.path.join(WEB_DIR, rel.lstrip("/")))
@@ -1536,6 +1692,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?")[0]
         self._extras = None
+        if not self._host_ok():
+            self._send(403, {"error": "Host 不在允许列表（防 DNS rebinding）。请用 http://127.0.0.1:<端口>/ 访问"})
+            return
         passed, fresh = check_access(self)
         self._extras = gate_headers(self, fresh)
         if not passed:
@@ -1547,7 +1706,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path in ("/", "/index.html"):
                 self._static("index.html")
-            elif path in ("/app.js", "/style.css"):
+            elif path in ("/app.js", "/style.css", "/extra.js"):
                 self._static(path[1:])
             elif path == "/api/state":
                 self._send(200, {
@@ -1556,6 +1715,9 @@ class Handler(BaseHTTPRequestHandler):
                     "server_ok": ollama_up(),
                     "levels": LEVELS,
                     "root": ROOT,
+                    "version": VERSION,
+                    "adult_only": bool(CONFIG.get("adult_only", True)),
+                    "access_key_required": bool(access_key()),
                 })
             elif path == "/api/persona":
                 qid = self._query().get("id", "")
@@ -1572,6 +1734,11 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/ctx":
                 q = self._query()
                 self._send(200, ctx_report(q.get("persona_id"), q.get("level"), q.get("mode")));
+            elif path == "/api/hardware":
+                try:
+                    self._send(200, hardware_payload())
+                except Exception as e:
+                    self._send(200, {"ok": False, "error": str(e)})
             elif path == "/api/me":
                 q = self._query()
                 f = (q.get("file") or "").strip()
@@ -1610,6 +1777,15 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         path = self.path.split("?")[0]
         self._extras = None
+        if not self._host_ok():
+            self._send(403, {"error": "Host 不在允许列表（防 DNS rebinding）。请用 http://127.0.0.1:<端口>/ 访问"})
+            return
+        if not self._origin_ok():
+            self._send(403, {"error": "跨站请求被拒绝：浏览器里任意网页都不能替你删角色卡/烧显卡"})
+            return
+        if not self._content_type_ok():
+            self._send(415, {"error": "写接口要求 Content-Type: application/json"})
+            return
         passed, fresh = check_access(self)
         self._extras = gate_headers(self, fresh)
         if not passed:
@@ -1625,21 +1801,14 @@ class Handler(BaseHTTPRequestHandler):
                 fields = fields_dict(body.get("fields"), "fields")
                 file = body.get("file") or ("角色-%s.md" % re.sub(r"[\\/:*?\"<>|]", "",
                                                                 fields.get("名字") or "新角色"))
-                try:
-                    oldp = safe_persona_path(file)
-                    if os.path.exists(oldp):
-                        for k, v in parse_persona(oldp).items():
-                            if k not in fields:
-                                fields[k] = v
-                except Exception:
-                    pass
-                saved = write_persona(file, fields)
+                saved = save_persona_merged(file, fields)
                 self._send(200, {"ok": True, "file": os.path.basename(saved),
                                  "personas": list_personas()})
             elif path == "/api/persona/delete":
-                p = safe_persona_path(body.get("file", ""))
-                if os.path.exists(p):
-                    os.remove(p)
+                with WRITE_LOCK:
+                    p = safe_persona_path(body.get("file", ""))
+                    if os.path.exists(p):
+                        os.remove(p)
                 self._send(200, {"ok": True, "personas": list_personas()})
             elif path == "/api/chat":
                 require_list(body.get("messages"), "messages")
@@ -1649,9 +1818,9 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/saves":
                 hist = require_list(body.get("history"), "history")
                 body["history"] = [m for m in hist if isinstance(m, dict)]
-                self._send(200, write_save(body))
+                self._send(200, write_save_locked(body))
             elif path == "/api/saves/delete":
-                delete_save(body.get("id", ""))
+                delete_save_locked(body.get("id", ""))
                 self._send(200, {"ok": True, "saves": list_saves()})
             elif path == "/api/suggest":
                 body["history"] = [m for m in require_list(body.get("history"), "history")
@@ -1660,20 +1829,10 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/me":
                 fields = fields_dict(body.get("fields"), "fields")
                 file = (body.get("file") or "").strip() or None
-                if file:
-                    try:
-                        for k, v in read_me(file).items():
-                            if k not in fields:
-                                fields[k] = v
-                    except Exception:
-                        pass
-                saved = write_me(fields, file)
-                name = os.path.basename(saved)
-                if body.get("select", True):
-                    me_select(name)
+                saved, name = save_me_merged(fields, file, bool(body.get("select", True)))
                 self._send(200, {"ok": True, "path": saved, "file": name, "list": list_me()})
             elif path == "/api/me/delete":
-                ok = delete_me(body.get("file") or "")
+                ok = delete_me_locked(body.get("file") or "")
                 self._send(200, {"ok": ok, "list": list_me(), "file": me_current()})
             elif path == "/api/compress":
                 body["history"] = [m for m in require_list(body.get("history"), "history")
@@ -2003,6 +2162,16 @@ def main():
     if host not in ("127.0.0.1", "localhost"):
         host = "0.0.0.0"
 
+    if host == "0.0.0.0" and not access_key():
+        if "--insecure-lan" in argv or CONFIG.get("allow_insecure_lan"):
+            print("[安全警告] 局域网开放且未设置 access_key：同网段任何人都能删你的角色卡、"
+                  "用你的显卡；仅在你完全信任该网络时使用。")
+        else:
+            print("[拒绝启动] --lan 模式必须先在 web/config.json 设置 access_key。")
+            print("           否则同一 Wi-Fi 下的任何设备都能改/删你的角色卡与存档。")
+            print("           确实要无口令开放：加 --insecure-lan，或配置 \"allow_insecure_lan\": true。")
+            return
+
     url = "http://%s:%d/" % ("127.0.0.1", port)
     try:
         UiServer.request_queue_size = 128      # 默认 backlog=5，并发一多就会拒连接
@@ -2019,7 +2188,7 @@ def main():
         return
     srv.daemon_threads = True
     print("=" * 62)
-    print("  本地可视化对话台")
+    print("  本地可视化对话台  qwensese v%s" % VERSION)
     print("  角色卡目录 : %s" % PERSONA_DIR)
     print("  模型       : %s" % CONFIG["model"])
     print("  本机地址   : %s" % url)

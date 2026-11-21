@@ -34,7 +34,7 @@ import urllib.parse
 import urllib.request
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-COPY_DIRS = ["web", "personas", "prompts", "config"]
+COPY_DIRS = ["web", "scripts", "personas", "prompts", "config"]
 FORBIDDEN_PORTS = {8717, 8718, 11434}  # 项目默认 / Ollama 端口，测试绝不用
 ACCESS_KEY = "testkey"
 
@@ -720,6 +720,83 @@ def t_unknown_post():
     return "404 not found"
 
 
+# ================================================================ 安全加固（第一阶段，无口令）
+def _base_host():
+    return urllib.parse.urlparse(STATE["base"]).hostname
+
+
+def _base_origin():
+    u = urllib.parse.urlparse(STATE["base"])
+    return "%s://%s:%d" % (u.scheme, u.hostname, u.port)
+
+
+@c1("安全: 每个响应都带 CSP / nosniff / X-Frame-Options")
+def t_security_headers():
+    code, obj, _, hdrs = get("/api/health")
+    expect(code == 200, "期望 200，实际 %s" % code)
+    expect(hdrs.get("X-Content-Type-Options") == "nosniff", "缺 nosniff: %r" % hdrs.get("X-Content-Type-Options"))
+    expect(hdrs.get("X-Frame-Options") == "DENY", "缺 X-Frame-Options: %r" % hdrs.get("X-Frame-Options"))
+    csp = hdrs.get("Content-Security-Policy") or ""
+    expect("default-src 'self'" in csp, "缺 CSP: %r" % csp)
+    expect(hdrs.get("Referrer-Policy") == "no-referrer", "缺 Referrer-Policy")
+    return "CSP + nosniff + DENY + no-referrer"
+
+
+@c1("安全: 静态页也带安全响应头")
+def t_security_headers_static():
+    code, raw, hdrs = http("GET", "/")
+    expect(code == 200, "期望 200，实际 %s" % code)
+    expect(hdrs.get("X-Content-Type-Options") == "nosniff", "静态页缺 nosniff")
+    expect("default-src 'self'" in (hdrs.get("Content-Security-Policy") or ""), "静态页缺 CSP")
+    expect(b"extra.js" in raw, "index.html 没引入 extra.js（18+ 门与硬件面板）")
+    return "index.html + extra.js + 安全头"
+
+
+@c1("安全: Host 不在允许列表 -> 403（防 DNS rebinding）")
+def t_host_check():
+    code, obj, _, _ = get("/api/health", headers={"Host": "evil.example"})
+    expect(code == 403, "伪造 Host 应变 403，实际 %s" % code)
+    code2, _, _ = http("GET", "/")
+    expect(code2 == 200, "正常 Host 不应被拦")
+    return "Host=evil.example -> 403"
+
+
+@c1("安全: 跨站 Origin 的 POST -> 403（防 CSRF）")
+def t_origin_check():
+    code, obj, _, _ = post("/api/health", {}, headers={"Origin": "https://evil.example"})
+    expect(code == 403, "跨站 Origin 应 403，实际 %s" % code)
+    return "跨站 POST -> 403"
+
+
+@c1("安全: 同源 Origin 的 POST 放行（走到路由层 404）")
+def t_origin_same():
+    code, obj, _, _ = post("/api/health", {}, headers={"Origin": _base_origin()})
+    expect(code == 404, "同源 Origin 应放行到路由层(404)，实际 %s" % code)
+    return "同源 POST -> 404（已过 Origin 检查）"
+
+
+@c1("安全: 非 JSON Content-Type 的 POST -> 415")
+def t_content_type():
+    code, raw, _ = http("POST", "/api/health", body=b"{}", headers={"Content-Type": "text/plain"})
+    expect(code == 415, "text/plain POST 应 415，实际 %s" % code)
+    return "text/plain -> 415"
+
+
+@c1("/api/hardware: 200 且返回显卡/推荐结构")
+def t_hardware():
+    code, obj, _, _ = get("/api/hardware", timeout=180)
+    expect(code == 200, "期望 200，实际 %s" % code)
+    if not obj.get("ok"):
+        raise AssertionError("硬件检测失败: %r" % (obj.get("error"),))
+    hw = obj.get("hardware") or {}
+    rec = obj.get("recommendation") or {}
+    expect("class" in hw and "gpus" in hw, "hardware 结构不完整")
+    primary = rec.get("primary") or {}
+    expect(primary.get("file", "").endswith(".gguf"), "primary.file 不是 .gguf: %r" % primary.get("file"))
+    expect("download_command" in rec and "model_advisor.py" in rec["download_command"], "缺下载命令")
+    return "%s / vram=%s / %s %s" % (hw.get("class"), hw.get("vram_gb"), primary.get("id"), primary.get("quant"))
+
+
 # ================================================================ 第二阶段（access_key = testkey）
 @c2("鉴权: 无钥匙 GET /api/state -> 403")
 def t_auth_gate_state():
@@ -778,6 +855,7 @@ def t_auth_query():
     expect(code == 200, "期望 200，实际 %s" % code)
     cookie = hdrs.get("Set-Cookie") or ""
     expect("qk=" + ACCESS_KEY in cookie, "没下发 cookie qk: %r" % cookie)
+    expect("SameSite=Strict" in cookie, "cookie 必须是 SameSite=Strict: %r" % cookie)
     return "200, Set-Cookie=qk=testkey"
 
 

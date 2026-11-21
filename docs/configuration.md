@@ -227,7 +227,21 @@ powershell -ExecutionPolicy Bypass -File scripts/import-model.ps1
 - 局域网：`scripts/start.ps1 -Lan`（或 `python web/app.py --lan`，或 `"lan": true`），绑定 `0.0.0.0`。
 - 开放局域网/公网前**必须**设置 `access_key`，公网还需要 HTTPS 反向代理与防火墙限制。
 - Ollama 的 `11434` 端口不要暴露到公网；本项目默认只把它当作本机上游。
-- 详细威胁模型见 [SECURITY.md](../SECURITY.md)。
+- 详细威胁模型见 [SECURITY.md](../SECURITY.md) 与 [security-model.md](security-model.md)。
+
+### 0.2.0 新增的请求级校验开关
+
+| 键 | 默认 | 说明 |
+| --- | --- | --- |
+| `host_check` | `true` | 校验 `Host` 头是否在白名单（127.0.0.1/localhost/配置 host/局域网 IP），防 DNS rebinding |
+| `origin_check` | `true` | 校验 POST 的 `Origin`/`Referer`，跨站请求返回 403 |
+| `require_json` | `true` | 写接口必须 `Content-Type: application/json`，否则 415 |
+| `allow_insecure_lan` | `false` | 是否允许"监听 0.0.0.0 且无 access_key"启动（默认拒绝） |
+| `adult_only` | `true` | 首次访问显示 18+ 内容提示（前端本地确认，非年龄验证） |
+| `access_log` | `false` | 是否把每个响应记一行到 `logs/access.log` |
+| `extra_hosts` | `[]` | 额外的允许 Host 列表（例如反向代理的域名） |
+
+这些开关默认全开；关闭会降低安全性，不建议在可被局域网/公网访问的部署里关闭。
 
 ## 9. 配置文件速查
 

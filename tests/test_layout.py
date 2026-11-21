@@ -149,8 +149,9 @@ REQUIRED_FILES = [
     "config/template-thinking.txt",
     "config/template-nothink.txt",
     "config/user_personas/default.md",
-    "config/current_user_persona.txt",
     "docs/configuration.md",
+    # 注意：config/current_user_persona.txt 是运行时指针（.gitignore 忽略），
+    # 不能列为必需文件，否则任何 clean clone 的测试都会 FAIL。
     # 发布必备
     ".gitignore",
     ".gitattributes",
@@ -178,7 +179,16 @@ META_FILES = [
     "scripts/start.sh",
     "scripts/download-model.ps1",
     "scripts/import-model.ps1",
+    "scripts/model_advisor.py",
+    "scripts/download_model.py",
+    "scripts/import_model.py",
+    "scripts/model_catalog.json",
+    "scripts/model-advisor.ps1",
     "scripts/README.md",
+    "docs/model-selection.md",
+    "docs/security-model.md",
+    "web/extra.js",
+    ".github/workflows/ci.yml",
 ]
 
 
@@ -347,8 +357,23 @@ def t_config_example():
     return "access_key 为空, model=%s, port=%s" % (cfg.get("model"), cfg.get("port"))
 
 
-LOCAL_MODULES = {os.path.splitext(f)[0] for f in os.listdir(os.path.join(REPO_ROOT, "web"))
-                 if f.endswith(".py")}
+def _local_module_names():
+    """仓库自带的 Python 模块名：web/ 与 scripts/ 下都算本地模块。
+
+    app.py 通过 sys.path 把 scripts/ 加进来后 import model_advisor —— 它是本仓库的
+    本地模块，不是第三方依赖，所以零依赖检查必须把它算作 allowed。
+    """
+    names = set()
+    for sub in ("web", "scripts"):
+        d = os.path.join(REPO_ROOT, sub)
+        if os.path.isdir(d):
+            for f in os.listdir(d):
+                if f.endswith(".py"):
+                    names.add(os.path.splitext(f)[0])
+    return names
+
+
+LOCAL_MODULES = _local_module_names()
 
 
 def imported_roots(path):
@@ -461,6 +486,78 @@ def t_known_missing_routes():
     expect(not has_version_route and not has_tags_route,
            "app.py 现在有 /api/version 或 /api/tags 路由了，请更新测试")
     return "本服务不提供 /api/version /api/tags（它们属于 Ollama 上游接口），GET 预期 404"
+
+
+@case("布局: 运行时指针文件缺失只 WARN（clean clone 必须能过）")
+def t_runtime_pointer_optional():
+    path = os.path.join(REPO_ROOT, "config", "current_user_persona.txt")
+    if os.path.isfile(path):
+        return "当前指针文件存在"
+    return ("WARN 运行时文件 config/current_user_persona.txt 由程序生成且被 .gitignore 忽略，"
+            "clean clone 缺失属于正常")
+
+
+@case("发布: 必需文件都在 git 跟踪里（防 clean clone 失败）")
+def t_git_tracked():
+    import shutil
+    import subprocess
+    if not shutil.which("git"):
+        return "WARN 没找到 git，跳过"
+    proc = subprocess.run(["git", "-C", REPO_ROOT, "ls-files"],
+                          capture_output=True, text=True, encoding="utf-8", timeout=60)
+    if proc.returncode != 0:
+        return "WARN 不是 git 工作树，跳过: %s" % (proc.stderr or "").strip()[:120]
+    tracked = {line.strip().replace("\\", "/") for line in proc.stdout.splitlines() if line.strip()}
+    need = REQUIRED_FILES + META_FILES
+    missing = [f for f in need if f not in tracked]
+    expect(not missing, "这些文件在工作树里但没有被 git 跟踪（clean clone 会缺）: %s" % ", ".join(missing))
+    return "%d 个必需/发布文件都已被 git 跟踪" % len(need)
+
+
+@case("安全: Host / Origin / Content-Type 校验与安全响应头都在 app.py 里")
+def t_security_guards():
+    src = read_text(os.path.join(REPO_ROOT, "web", "app.py"))
+    tokens = [
+        "SECURITY_HEADERS",
+        "def _host_ok",
+        "def _origin_ok",
+        "def _content_type_ok",
+        "SameSite=Strict",
+        "def same_origin",
+        "WRITE_LOCK",
+        "def save_persona_merged",
+        "/api/hardware",
+        "def hardware_payload",
+    ]
+    missing = [t for t in tokens if t not in src]
+    expect(not missing, "app.py 缺少安全/新功能实现: %s" % ", ".join(missing))
+    return "Host/Origin/Content-Type/安全头/写锁/硬件接口 齐全"
+
+
+@case("硬件: 选型目录与脚本齐全，catalog 是合法 JSON")
+def t_model_toolchain():
+    cat = os.path.join(REPO_ROOT, "scripts", "model_catalog.json")
+    expect(os.path.isfile(cat), "缺少 scripts/model_catalog.json")
+    try:
+        data = json.loads(read_text(cat))
+    except Exception as e:
+        fail("scripts/model_catalog.json 不是合法 JSON: %s" % e)
+    models = data.get("models") or []
+    expect(len(models) >= 6, "候选模型太少: %d" % len(models))
+    ids = [m.get("id") for m in models]
+    expect(len(ids) == len(set(ids)), "模型 id 重复: %r" % ids)
+    expect(any(m.get("tested") for m in models), "没有任何 tested=true 的实测模型")
+    return "%d 个候选模型，catalog 合法" % len(models)
+
+
+@case("安全: 默认配置含校验开关（config.example.json）")
+def t_security_config_example():
+    cfg = json.loads(read_text(os.path.join(REPO_ROOT, "web", "config.example.json")))
+    for key in ("host_check", "origin_check", "require_json", "adult_only", "access_log"):
+        expect(key in cfg, "config.example.json 缺安全字段 %r" % key)
+    expect(cfg["host_check"] is True and cfg["origin_check"] is True and cfg["require_json"] is True,
+           "安全开关默认必须是 true")
+    return "host/origin/json 校验默认开启"
 
 
 # ---------------------------------------------------------------- 主流程

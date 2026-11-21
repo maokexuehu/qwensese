@@ -38,6 +38,17 @@ if [ ! -f "web/config.json" ]; then
     fi
 fi
 
+# ---- 2.5 模型文件检查（没有 GGUF 时提示先选型/下载）--------------------
+GGUF_COUNT=$(find models/gguf -maxdepth 1 -name '*.gguf' 2>/dev/null | wc -l | tr -d ' ')
+if [ "${GGUF_COUNT:-0}" = "0" ]; then
+    note "models/gguf/ 里还没有 GGUF 模型。先按显卡选型并下载（任意平台通用）："
+    note "  python3 scripts/model_advisor.py"
+    note "  python3 scripts/model_advisor.py --download huihui-27b --quant UD-IQ4_XS"
+    note "  python3 scripts/import_model.py --gguf models/gguf/<文件名>.gguf --name qwensese-27b"
+else
+    note "发现 $GGUF_COUNT 个 GGUF 模型文件（models/gguf/）。"
+fi
+
 # ---- 3. Ollama 可达性检查 ----------------------------------------------
 OLLAMA_URL="http://127.0.0.1:11434"
 if command -v curl >/dev/null 2>&1; then

@@ -7,11 +7,13 @@
 
 | 项目 | 要求 | 检查方式 |
 | --- | --- | --- |
-| 操作系统 | Windows 10/11（一键脚本）；Linux/macOS 可手工启动 | — |
+| 操作系统 | Windows 10/11（一键脚本）；Linux/macOS 用 `start.sh` + 纯 Python 工具链，体验一致 | — |
 | Python | 3.10+，只用标准库 | `python --version` |
 | Ollama | 建议最新版 | `ollama --version` |
-| 磁盘 | 约 12～15 GB（放下 GGUF 模型） | — |
-| 显存 | 推荐 16 GB 级显卡；显存不足会卸载到内存并明显掉速 | — |
+| 磁盘 | 给 `models/` 预留 20 GB+（下载临时文件 + Ollama blobs 各一份） | — |
+| 显存 | 默认 27B 需 16 GB 级显存；8 GB 用 8B、12 GB 用 14B，见 [model-selection.md](model-selection.md) | — |
+| 内存 | 建议 ≥16 GB（显存不足时会卸载到内存，速度骤降） | — |
+| 网络 | 仅首次下载模型需要联网，之后完全离线 | — |
 
 把仓库下载到本地（`git clone` 或下载 ZIP 解压），然后进入仓库根目录：
 
@@ -56,9 +58,30 @@ curl.exe http://127.0.0.1:11434/api/version
 
 > 安全提醒：Ollama 自身没有鉴权，只应监听 `127.0.0.1`，不要把它暴露到公网。
 
-## 2. 下载模型权重（GGUF）
+## 2. 按显卡选模型并下载权重（GGUF）
 
-推荐模型：`huihui-ai/Huihui-Qwen3.8-27B-abliterated-GGUF`，默认量化 `UD-IQ4_XS`（约 13.4 GB）。
+**先量显卡**：不同显存能跑的量化差别很大，不要盲目下 13 GB。
+
+```bash
+# Windows / Linux / macOS 通用：检测显卡/显存/内存，打印推荐与下载命令
+python scripts/model_advisor.py
+```
+
+16 GB 级显卡的默认推荐是 `huihui-ai/Huihui-Qwen3.8-27B-abliterated-GGUF` 的
+`UD-IQ4_XS`（约 13.4 GB）。按推荐结果下载：
+
+```bash
+python scripts/model_advisor.py --download huihui-27b --quant UD-IQ4_XS
+```
+
+下载器会**断点续传**并做 **SHA256 校验**（不匹配会改名 `.bad` 并失败）。也可以手动指定：
+
+```bash
+python scripts/download_model.py --repo huihui-ai/Huihui-Qwen3.8-27B-abliterated-GGUF \
+    --file Huihui-Qwen3.8-27B-abliterated-UD-IQ4_XS.gguf
+```
+
+Windows 旧脚本仍可用（curl 版，支持断点续传，但**没有** SHA256 校验）：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/download-model.ps1
@@ -85,7 +108,14 @@ powershell -ExecutionPolicy Bypass -File scripts/download-model.ps1 -Quant UD-Q3
 
 ## 3. 导入成 Ollama 模型
 
+```bash
+# 跨平台
+python scripts/import_model.py --gguf models/gguf/Huihui-Qwen3.8-27B-abliterated-UD-IQ4_XS.gguf \
+    --name qwensese-27b --num-ctx 12288
+```
+
 ```powershell
+# Windows 也可以继续用旧脚本
 powershell -ExecutionPolicy Bypass -File scripts/import-model.ps1
 ```
 

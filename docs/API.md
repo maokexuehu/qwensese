@@ -3,7 +3,7 @@
 本文覆盖 qwensese 本地服务（`web/app.py`）提供的全部 HTTP 接口。所有接口都由同一个
 `ThreadingHTTPServer` 提供，默认地址为 `http://127.0.0.1:8717`（由 `web/config.json` 的 `port` 决定）。
 
-- 本服务接口：19 个 `/api/*` 路径（21 个方法-路径组合）+ `/v1` 兼容层 2 个端点（另有 `/health`、`/models`、`/chat/completions` 三个别名）。
+- 本服务接口：20 个 `/api/*` 路径（22 个方法-路径组合）+ `/v1` 兼容层 2 个端点（另有 `/health`、`/models`、`/chat/completions` 三个别名）。
 - **不是本服务提供的**：`/api/tags`、`/api/version` 是 Ollama 上游接口（`http://127.0.0.1:11434`），本服务不代理它们，详见文末「Ollama 上游接口」。
 - 需要看架构与数据流，见 [architecture.md](architecture.md)；配置项见 [configuration.md](configuration.md)。
 
@@ -26,6 +26,17 @@
 - 字符串编码一律 UTF-8；`ensure_ascii=False`（中文直接输出，不转义）。
 - 服务端为 HTTP/1.0（`server_version: qwensese-ui/1.0`），流式接口靠关闭连接表示结束。
 
+### 请求级安全校验（0.2.0 起）
+
+所有响应都会带 `X-Content-Type-Options: nosniff`、`X-Frame-Options: DENY`、`Referrer-Policy: no-referrer`、
+`Content-Security-Policy`、COOP/CORP、`Permissions-Policy` 等安全头。
+
+- **Host 校验**：`Host` 头必须是 `127.0.0.1` / `localhost` / 配置的 host / 当前局域网 IP，否则 403（防 DNS rebinding）。
+- **Origin/Referer 校验**：带 `Origin` 或 `Referer` 的 POST 必须是允许的源，跨站返回 403。
+  不带 `Origin`/`Referer` 的客户端（curl、SDK）不受影响。
+- **Content-Type**：POST 必须声明 `application/json`，否则 415。
+- 这些校验可在 `web/config.json` 用 `host_check` / `origin_check` / `require_json` 关闭（不建议）。
+
 ### 鉴权（`access_key`）
 
 若 `web/config.json` 的 `access_key` 非空，则**所有页面与 API**（包括 `/`、`/app.js`、`/style.css`）都要携带口令；
@@ -40,7 +51,7 @@
 通过查询参数首次认证成功时，响应会附带：
 
 ```http
-Set-Cookie: qk=<access_key>; Path=/; Max-Age=2592000; SameSite=Lax; HttpOnly
+Set-Cookie: qk=<access_key>; Path=/; Max-Age=2592000; SameSite=Strict; HttpOnly
 ```
 
 失败时：
@@ -57,7 +68,8 @@ Set-Cookie: qk=<access_key>; Path=/; Max-Age=2592000; SameSite=Lax; HttpOnly
 | --- | --- |
 | 200 | 成功（部分"业务失败"也用 200 + `ok: false`，见各接口说明） |
 | 400 | 参数/请求体不合法（JSON 解析失败、类型不对、文件名不合法、文本过短等） |
-| 403 | `access_key` 已设置但未携带或不匹配 |
+| 403 | `access_key` 已设置但未携带/不匹配；或 Host/Origin 校验未通过 |
+| 415 | 写接口的 `Content-Type` 不是 `application/json` |
 | 404 | 路径不存在，或请求的角色卡/存档不存在 |
 | 500 | 服务端异常（Ollama 调用失败、模型不存在等） |
 | 503 | Ollama 不可用（`/api/chat`、`/api/import`、`/api/ollama/start` 的部分路径） |
@@ -95,6 +107,7 @@ Set-Cookie: qk=<access_key>; Path=/; Max-Age=2592000; SameSite=Lax; HttpOnly
 | 21 | POST | `/api/ollama/start` | 尝试拉起项目内 Ollama |
 | 22 | GET | `/v1/models`（别名 `/models`） | OpenAI 兼容模型列表 |
 | 23 | POST | `/v1/chat/completions`（别名 `/chat/completions`） | OpenAI 兼容对话 |
+| — | GET | `/api/hardware` | 硬件检测与模型选型（0.2.0 起，详见文末） |
 
 ---
 
@@ -1049,6 +1062,70 @@ data: [DONE]
 | 503 | Ollama 不可用：`{"error": {"message": "Ollama 没起来"}}`（注意这里是嵌套结构） |
 
 ---
+
+## 硬件检测与模型选型（0.2.0 起）
+
+### `GET /api/hardware`
+
+检测本机显卡/显存/内存/CPU，返回 Qwen GGUF 模型的量化推荐与可直接执行的下载/导入命令。
+结果在进程内缓存 5 分钟（硬件不会频繁变化），**总是返回 200**：检测失败时 `ok: false` 并带 `error`。
+
+响应示例（截断）：
+
+```json
+{
+  "ok": true,
+  "hardware": {
+    "os": "Windows",
+    "cpu": "13th Gen Intel(R) Core(TM) i7-13700KF",
+    "cores": 24,
+    "ram_gb": 31.8,
+    "vram_gb": 15.9,
+    "class": "high",
+    "gpus": [{"name": "NVIDIA GeForce RTX 5080", "vram_gb": 15.9, "kind": "nvidia"}],
+    "primary_gpu": {"name": "NVIDIA GeForce RTX 5080", "vram_gb": 15.9, "kind": "nvidia"},
+    "unified_memory": false
+  },
+  "recommendation": {
+    "class_label": "高性能（12–20GB 显存）",
+    "primary": {
+      "id": "huihui-27b",
+      "label": "27B abliterated · 本仓库实测默认",
+      "quant": "UD-IQ4_XS",
+      "file": "Huihui-Qwen3.8-27B-abliterated-UD-IQ4_XS.gguf",
+      "repo": "huihui-ai/Huihui-Qwen3.8-27B-abliterated-GGUF",
+      "size_gb": 13.4,
+      "min_vram_gb": 16.0,
+      "abliterated": true,
+      "tested": true,
+      "speed_hint": "23–35 tok/s（粗估）"
+    },
+    "suggested_num_ctx": 12288,
+    "download_command": "python scripts/model_advisor.py --download huihui-27b --quant UD-IQ4_XS",
+    "import_command": "python scripts/import_model.py --gguf models/gguf/Huihui-Qwen3.8-27B-abliterated-UD-IQ4_XS.gguf --name qwensese-huihui-27b --num-ctx 12288",
+    "faster_alternative": {"id": "huihui-14b", "quant": "Q5_K_M"},
+    "quality_alternative": null,
+    "warnings": [],
+    "fallback": false
+  },
+  "catalog_version": 1
+}
+```
+
+字段说明：
+
+| 字段 | 说明 |
+| --- | --- |
+| `hardware.class` | `flagship` / `high` / `mainstream` / `entry` / `integrated` / `cpu` |
+| `hardware.gpus` | 检测到的全部 GPU（独显优先，核显/虚拟显示器列后面） |
+| `recommendation.primary` | 首选模型+量化；`tested: true` 表示本仓库作者实测过 |
+| `recommendation.faster_alternative` / `quality_alternative` | 更小/更大的备选（可能为 `null`） |
+| `recommendation.fallback` | 当前硬件装不下任何候选时为 `true`（给出最小可用项） |
+| `recommendation.warnings` | 需要提醒的取舍（CPU 模式、显存吃紧等） |
+| `download_command` / `import_command` | 项目根目录可直接执行的命令 |
+
+命令行等价物：`python scripts/model_advisor.py`（详细报告）或 `--json`（同样的机器可读输出）。
+完整选型说明见 [model-selection.md](model-selection.md)。
 
 ## Ollama 上游接口（非本服务提供）
 
