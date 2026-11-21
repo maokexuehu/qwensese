@@ -78,4 +78,4 @@ python tests/run_all.py
 
 ## 许可证
 
-提交代码即表示你同意以本仓库的 [MIT License](LICENSE) 授权你的贡献。模型权重与第三方内容不适用 MIT 许可，详见 `LICENSE` 的附加说明。
+提交代码即表示你同意以本仓库的 [MIT License](LICENSE) 授权你的贡献。模型权重与第三方内容不适用 MIT 许可，详见 `NOTICE.md`。

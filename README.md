@@ -122,6 +122,7 @@ qwensese/
 ├── CONTRIBUTING.md             # 贡献指南
 ├── SECURITY.md                 # 安全策略与威胁模型
 ├── LICENSE                     # MIT
+├── NOTICE.md                   # 模型权重与第三方内容说明
 ├── requirements.txt            # 零第三方依赖说明
 ├── .gitignore                  # 忽略模型权重/存档/本机配置
 ├── .gitattributes              # 换行策略（文本 LF，脚本按系统）
@@ -246,4 +247,4 @@ qwensese/
 
 ### 许可
 
-本项目以 [MIT License](LICENSE) 发布。模型权重、第三方模型与第三方内容由各自的发布方按其许可证提供，不在本仓库的 MIT 许可范围内；`personas/`、`config/` 中你自己添加的内容由你自行负责。
+本项目以 [MIT License](LICENSE) 发布。模型权重、第三方模型与第三方内容由各自的发布方按其许可证提供，不在本仓库的 MIT 许可范围内；`personas/`、`config/` 中你自己添加的内容由你自行负责。详见 [NOTICE.md](NOTICE.md)。

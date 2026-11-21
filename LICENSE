@@ -19,13 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----------------------------------------------------------------------------
-Note on model weights and third-party content:
-This repository ships only source code and documentation. The GGUF model
-weights referenced by the documentation are distributed by their original
-publishers (e.g. Hugging Face model repositories) under their own licenses,
-and are NOT covered by this MIT license. Persona cards, prompt templates and
-any text you add to personas/ or config/ are your own responsibility and are
-not part of this software's licensed content beyond the example files that
-ship with the repository.
